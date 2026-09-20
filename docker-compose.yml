@@ -14,12 +14,12 @@ services:
       timeout: 5s
       retries: 10
 
-  app:
-  build:
-    context: .
-    dockerfile: Dockerfile
-    args:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fox_ai_social}
+    app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fox_ai_social}
     restart: unless-stopped
     depends_on:
       db:
