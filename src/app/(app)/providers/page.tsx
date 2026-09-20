@@ -48,21 +48,40 @@ export default function ProvidersPage() {
     enabled: true,
   });
 
+  /** Pure fetch: returns the payload and touches no state, so it is safe to call from an effect. */
+  const fetchProviders = async (): Promise<ProviderRow[] | null> => {
+    const res = await fetch("/api/data?type=agentRuns&limit=1");
+    await res.json();
+    const health = await fetch("/api/system?scope=health");
+    const data = await health.json();
+    return data.ok ? ((data.providers ?? []) as ProviderRow[]) : null;
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applyProviders = (next: ProviderRow[] | null) => {
+    if (next) setProviders(next);
+  };
+
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/data?type=agentRuns&limit=1");
-      await res.json();
-      const health = await fetch("/api/system?scope=health");
-      const data = await health.json();
-      if (data.ok) setProviders(data.providers ?? []);
+      applyProviders(await fetchProviders());
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    let active = true;
+    fetchProviders()
+      .then(applyProviders)
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const save = async () => {

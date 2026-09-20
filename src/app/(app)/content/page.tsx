@@ -46,6 +46,14 @@ export default function ContentPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
+  // Re-arm the spinner while the status filter changes. Adjusting state during
+  // render is React's supported way to react to a changed value; doing it in
+  // the effect would cause a cascading render.
+  const [loadingFor, setLoadingFor] = useState(status);
+  if (loadingFor !== status) {
+    setLoadingFor(status);
+    setLoading(true);
+  }
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -63,22 +71,43 @@ export default function ContentPage() {
     scheduledAt: "",
   });
 
-  const load = useCallback(async () => {
+  /** Pure fetch: returns the payload and touches no state, so it is safe to call from an effect. */
+  const fetchRows = useCallback(async (): Promise<ContentRow[] | null> => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    const res = await fetch(`/api/data?type=content&${params.toString()}&limit=120`);
+    const data = await res.json();
+    return data.ok ? (data.rows as ContentRow[]) : null;
+  }, [status]);
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applyRows = (next: ContentRow[] | null) => {
+    if (next) setRows(next);
+  };
+
+  const load = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (status) params.set("status", status);
-      const res = await fetch(`/api/data?type=content&${params.toString()}&limit=120`);
-      const data = await res.json();
-      if (data.ok) setRows(data.rows);
+      applyRows(await fetchRows());
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  };
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let active = true;
+    fetchRows()
+      .then((next) => {
+        if (active) applyRows(next);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fetchRows]);
 
   useEffect(() => {
     fetch("/api/clients")

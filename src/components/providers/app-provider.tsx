@@ -31,6 +31,12 @@ function systemTheme(): "dark" | "light" {
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
+/** Reads a stored preference. SSR-safe: falls back on the server. */
+function readStored<T extends string>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  return (window.localStorage.getItem(key) as T | null) ?? fallback;
+}
+
 export function AppProvider({
   children,
   initialTheme = "dark",
@@ -40,12 +46,17 @@ export function AppProvider({
   initialTheme?: ThemeMode;
   initialLocale?: Locale;
 }) {
-  const [theme, setThemeState] = useState<ThemeMode>(initialTheme);
-  const [locale, setLocaleState] = useState<Locale>(initialLocale);
+  // Stored preferences are read in lazy initializers so the first client
+  // render already carries them — no mount effect, no cascading render.
+  const [theme, setThemeState] = useState<ThemeMode>(() => readStored("fox-theme", initialTheme));
+  const [locale, setLocaleState] = useState<Locale>(() => readStored("fox-locale", initialLocale));
   const [resolvedTheme, setResolved] = useState<"dark" | "light">(
     initialTheme === "system" ? "dark" : initialTheme,
   );
-  const [ready, setReady] = useState(false);
+  // Kept on the context for API compatibility. Nothing waits on it any more:
+  // the preferences it used to signal are applied during the first client
+  // render. False during server rendering.
+  const ready = typeof window !== "undefined";
 
   // Apply theme → <html data-theme>
   useEffect(() => {
@@ -68,14 +79,6 @@ export function AppProvider({
     document.documentElement.setAttribute("lang", locale);
     document.documentElement.setAttribute("dir", dir);
   }, [locale]);
-
-  useEffect(() => {
-    const storedTheme = window.localStorage.getItem("fox-theme") as ThemeMode | null;
-    const storedLocale = window.localStorage.getItem("fox-locale") as Locale | null;
-    if (storedTheme) setThemeState(storedTheme);
-    if (storedLocale) setLocaleState(storedLocale);
-    setReady(true);
-  }, []);
 
   const setTheme = useCallback((value: ThemeMode) => {
     setThemeState(value);

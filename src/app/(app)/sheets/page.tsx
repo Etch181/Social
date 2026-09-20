@@ -23,6 +23,13 @@ interface SyncRun {
   startedAt: string;
 }
 
+/** What one Sheets page fetch resolves to. `health` is undefined when the
+ *  health probe itself failed, so "no sheets check" stays distinguishable. */
+interface SheetsSnapshot {
+  runs: SyncRun[] | null;
+  health: { ok: boolean; message: string } | null | undefined;
+}
+
 export default function SheetsPage() {
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,33 +37,54 @@ export default function SheetsPage() {
   const [health, setHealth] = useState<{ ok: boolean; message: string } | null>(null);
   const toast = useToast();
 
+  /** Pure fetch: returns both payloads and touches no state, so it is safe to call from an effect. */
+  const fetchSheets = async (): Promise<SheetsSnapshot | null> => {
+    const [runsRes, healthRes] = await Promise.all([
+      fetch("/api/data?type=syncRuns"),
+      fetch("/api/system?scope=health"),
+    ]);
+    const runsData = await runsRes.json();
+    const healthData = await healthRes.json();
+    const runs = runsData.ok ? (runsData.rows as SyncRun[]) : null;
+    let health: { ok: boolean; message: string } | null | undefined;
+    if (healthData.ok) {
+      const sheetsCheck = (healthData.checks ?? []).find(
+        (c: { key: string; message: string; status: string }) => c.key === "sheets",
+      );
+      health = sheetsCheck
+        ? { ok: sheetsCheck.status === "OPERATIONAL", message: sheetsCheck.message }
+        : null;
+    }
+    return runs === null && health === undefined ? null : { runs, health };
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applySheets = (next: SheetsSnapshot | null) => {
+    if (!next) return;
+    if (next.runs) setRuns(next.runs);
+    if (next.health !== undefined) setHealth(next.health);
+  };
+
   const load = async () => {
     setLoading(true);
     try {
-      const [runsRes, healthRes] = await Promise.all([
-        fetch("/api/data?type=syncRuns"),
-        fetch("/api/system?scope=health"),
-      ]);
-      const runsData = await runsRes.json();
-      const healthData = await healthRes.json();
-      if (runsData.ok) setRuns(runsData.rows);
-      if (healthData.ok) {
-        const sheetsCheck = (healthData.checks ?? []).find(
-          (c: { key: string; message: string; status: string }) => c.key === "sheets",
-        );
-        setHealth(
-          sheetsCheck
-            ? { ok: sheetsCheck.status === "OPERATIONAL", message: sheetsCheck.message }
-            : null,
-        );
-      }
+      applySheets(await fetchSheets());
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    let active = true;
+    fetchSheets()
+      .then(applySheets)
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const sync = async () => {

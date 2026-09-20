@@ -39,26 +39,53 @@ export default function ContentDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const [item, setItem] = useState<ContentDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  // Re-arm the spinner while `id` changes. Adjusting state during render is
+  // React's supported way to react to a changed value; doing it in the effect
+  // would cause a cascading render.
+  const [loadingFor, setLoadingFor] = useState(id);
+  if (loadingFor !== id) {
+    setLoadingFor(id);
+    setLoading(true);
+  }
   const [saving, setSaving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const toast = useToast();
 
+  /** Pure fetch: returns the payload and touches no state, so it is safe to call from an effect. */
+  const fetchItem = async (): Promise<ContentDetail | null | undefined> => {
+    const res = await fetch(`/api/data?type=content&limit=300`);
+    const data = await res.json();
+    if (!data.ok) return undefined;
+    return (data.rows as ContentDetail[]).find((r) => r.id === id) ?? null;
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applyItem = (next: ContentDetail | null | undefined) => {
+    if (next !== undefined) setItem(next);
+  };
+
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/data?type=content&limit=300`);
-      const data = await res.json();
-      if (data.ok) {
-        const found = data.rows.find((r: ContentDetail) => r.id === id);
-        setItem(found ?? null);
-      }
+      applyItem(await fetchItem());
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    let active = true;
+    fetchItem()
+      .then((next) => {
+        if (active) applyItem(next);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 

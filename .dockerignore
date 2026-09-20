@@ -1,0 +1,38 @@
+# The Dockerfile does `COPY . .`, so anything listed here stays OUT of the
+# build context and never reaches the image layers.
+
+# --- secrets: never bake these into an image ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account*.json
+
+# --- rebuilt inside the image by `npm ci` ---
+node_modules/
+
+# --- rebuilt inside the image by `npm run build` ---
+.next/
+out/
+dist/
+build/
+
+# --- repo metadata ---
+.git/
+.gitignore
+.github/
+
+# --- local tooling / caches ---
+.cache/
+.eslintcache
+.swc/
+.turbo/
+coverage/
+.idea/
+.vscode/
+*.log
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
