@@ -6,13 +6,19 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_APP_URL=https://social.foxaiagency.online
+
+ARG DATABASE_URL=postgresql://postgres:postgres@db:5432/fox_ai_social
+ENV DATABASE_URL=$DATABASE_URL
+
 RUN npm run build
 
 # ---------- runtime stage ----------
 FROM node:22-alpine AS runner
 WORKDIR /app
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
