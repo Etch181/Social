@@ -9,12 +9,16 @@ services:
     volumes:
       - fox_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fox_ai_social}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fox_ai_social}"
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
 
-    app:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
@@ -27,28 +31,38 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fox_ai_social}
+
       APP_URL: ${APP_URL:-https://social.foxaiagency.online}
+
       AUTH_SECRET: ${AUTH_SECRET}
       JWT_SECRET: ${JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+
       OMNIROUTE_URL: ${OMNIROUTE_URL:-}
       OMNIROUTE_API_KEY: ${OMNIROUTE_API_KEY:-}
       OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-gpt-4o-mini}
+
       ARENA_API_URL: ${ARENA_API_URL:-}
       ARENA_API_KEY: ${ARENA_API_KEY:-}
       ARENA_MODEL: ${ARENA_MODEL:-gpt-4o-mini}
+
       OPENROUTER_URL: ${OPENROUTER_URL:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+
       GOOGLE_SHEETS_ID: ${GOOGLE_SHEETS_ID:-}
       GOOGLE_SERVICE_ACCOUNT: ${GOOGLE_SERVICE_ACCOUNT:-}
+
       META_APP_ID: ${META_APP_ID:-}
       META_APP_SECRET: ${META_APP_SECRET:-}
       META_REDIRECT_URI: ${META_REDIRECT_URI:-}
+
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+
     ports:
       - "127.0.0.1:3000:3000"
 
