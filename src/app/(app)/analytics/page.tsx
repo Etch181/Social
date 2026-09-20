@@ -32,18 +32,30 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsPayload | null>(null);
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
+  // Re-arm the spinner while `days` changes. Adjusting state during render is
+  // React's supported way to react to a changed value; doing it in the effect
+  // would cause a cascading render.
+  const [loadingFor, setLoadingFor] = useState(days);
+  if (loadingFor !== days) {
+    setLoadingFor(days);
+    setLoading(true);
+  }
   const toast = useToast();
 
   useEffect(() => {
-    setLoading(true);
+    let active = true;
     fetch(`/api/data?type=analytics&days=${days}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.ok) setData(d);
+        if (active && d.ok) setData(d);
       })
       .catch(() => undefined)
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [days]);
 
   const platformData = useMemo(

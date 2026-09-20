@@ -443,9 +443,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const reduce = useReducedMotion();
   const { t } = useApp();
 
-  useEffect(() => {
+  // Close the mobile drawer on navigation. Adjusting state during render is
+  // React's supported way to react to a changed value; doing it in an effect
+  // would cause a cascading render.
+  const [drawerPath, setDrawerPath] = useState(pathname);
+  if (drawerPath !== pathname) {
+    setDrawerPath(pathname);
     setDrawer(false);
-  }, [pathname]);
+  }
 
   return (
     <div className="relative min-h-screen">

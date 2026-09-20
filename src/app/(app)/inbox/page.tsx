@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   Inbox as InboxIcon,
   Send,
@@ -43,17 +43,35 @@ export default function InboxPage() {
   const [sending, setSending] = useState(false);
   const toast = useToast();
 
-  const load = useCallback(async () => {
+  /** Pure fetch: returns the payload and touches no state, so it is safe to call from an effect. */
+  const fetchConversations = async (): Promise<ConversationRow[] | null> => {
     const res = await fetch("/api/data?type=conversations&limit=120");
     const data = await res.json();
-    if (data.ok) {
-      setConversations(data.rows);
-      if (!active && data.rows[0]) setActive(data.rows[0]);
-    }
-  }, [active]);
+    return data.ok ? (data.rows as ConversationRow[]) : null;
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applyConversations = (next: ConversationRow[] | null) => {
+    if (!next) return;
+    setConversations(next);
+    if (!active && next[0]) setActive(next[0]);
+  };
+
+  const load = async () => {
+    applyConversations(await fetchConversations());
+  };
 
   useEffect(() => {
-    load();
+    // Named `alive`, not `active`, to avoid shadowing the active-conversation state.
+    let alive = true;
+    fetchConversations()
+      .then((rows) => {
+        if (alive) applyConversations(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

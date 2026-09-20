@@ -28,19 +28,38 @@ export default function UsersPage() {
     role: "STAFF",
   });
 
+  /** Pure fetch: returns the payload and touches no state, so it is safe to call from an effect. */
+  const fetchRows = async (): Promise<UserRow[] | null> => {
+    const res = await fetch("/api/data?type=users");
+    const data = await res.json();
+    return data.ok ? (data.rows as UserRow[]) : null;
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applyRows = (next: UserRow[] | null) => {
+    if (next) setRows(next);
+  };
+
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/data?type=users");
-      const data = await res.json();
-      if (data.ok) setRows(data.rows);
+      applyRows(await fetchRows());
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    let active = true;
+    fetchRows()
+      .then(applyRows)
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const create = async () => {

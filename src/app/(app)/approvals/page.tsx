@@ -34,19 +34,38 @@ export default function ApprovalsPage() {
   const [note, setNote] = useState("");
   const toast = useToast();
 
+  /** Pure fetch: returns the payload and touches no state, so it is safe to call from an effect. */
+  const fetchRows = async (): Promise<ApprovalRow[] | null> => {
+    const res = await fetch("/api/data?type=approvals&limit=120");
+    const data = await res.json();
+    return data.ok ? (data.rows as ApprovalRow[]) : null;
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applyRows = (next: ApprovalRow[] | null) => {
+    if (next) setRows(next);
+  };
+
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/data?type=approvals&limit=120");
-      const data = await res.json();
-      if (data.ok) setRows(data.rows);
+      applyRows(await fetchRows());
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    let active = true;
+    fetchRows()
+      .then(applyRows)
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const decide = async (contentId: string, action: "approve" | "reject") => {

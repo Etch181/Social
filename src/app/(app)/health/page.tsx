@@ -43,12 +43,22 @@ export default function HealthPage() {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
+  /** Pure fetch: returns the payload and touches no state, so it is safe to call from an effect. */
+  const fetchChecks = async (): Promise<HealthCheck[] | null> => {
+    const res = await fetch("/api/system?scope=health");
+    const data = await res.json();
+    return data.ok ? (data.checks as HealthCheck[]) : null;
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applyChecks = (next: HealthCheck[] | null) => {
+    if (next) setChecks(next);
+  };
+
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/system?scope=health");
-      const data = await res.json();
-      if (data.ok) setChecks(data.checks);
+      applyChecks(await fetchChecks());
     } catch {
       toast.show("Failed to load system health", "error");
     } finally {
@@ -57,9 +67,22 @@ export default function HealthPage() {
   };
 
   useEffect(() => {
-    load();
+    let active = true;
+    fetchChecks()
+      .then(applyChecks)
+      .catch(() => {
+        toast.show("Failed to load system health", "error");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    // `load` is passed by reference, so the interval refresh is not a
+    // synchronous state write from inside the effect body.
     const id = window.setInterval(load, 60_000);
-    return () => window.clearInterval(id);
+    return () => {
+      active = false;
+      window.clearInterval(id);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

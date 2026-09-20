@@ -34,6 +34,13 @@ interface AccountRow {
   lastCheckedAt: string | null;
 }
 
+/** What one social page fetch resolves to. */
+interface SocialSnapshot {
+  platforms: PlatformInfo[] | null;
+  accounts: AccountRow[] | null;
+  clients: { id: string; name: string }[] | null;
+}
+
 export default function SocialPage() {
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([]);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
@@ -51,7 +58,8 @@ export default function SocialPage() {
     accessToken: "",
   });
 
-  const load = async () => {
+  /** Pure fetch: returns all three payloads and touches no state, so it is safe to call from an effect. */
+  const fetchSocial = async (): Promise<SocialSnapshot> => {
     const [healthRes, accountsRes, clientsRes] = await Promise.all([
       fetch("/api/system?scope=health"),
       fetch("/api/data?type=socialAccounts"),
@@ -60,16 +68,37 @@ export default function SocialPage() {
     const health = await healthRes.json();
     const acc = await accountsRes.json();
     const cl = await clientsRes.json();
-    if (health.ok) setPlatforms(health.platforms ?? []);
-    if (acc.ok) setAccounts(acc.rows);
-    if (cl.ok) {
-      setClients(cl.clients);
-      if (cl.clients[0]) setForm((f) => ({ ...f, clientId: cl.clients[0].id }));
+    return {
+      platforms: health.ok ? (health.platforms as PlatformInfo[]) ?? [] : null,
+      accounts: acc.ok ? (acc.rows as AccountRow[]) : null,
+      clients: cl.ok ? (cl.clients as { id: string; name: string }[]) : null,
+    };
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applySocial = (next: SocialSnapshot) => {
+    if (next.platforms) setPlatforms(next.platforms);
+    if (next.accounts) setAccounts(next.accounts);
+    if (next.clients) {
+      setClients(next.clients);
+      if (next.clients[0]) setForm((f) => ({ ...f, clientId: next.clients![0].id }));
     }
   };
 
+  const load = async () => {
+    applySocial(await fetchSocial());
+  };
+
   useEffect(() => {
-    load();
+    let active = true;
+    fetchSocial()
+      .then((snapshot) => {
+        if (active) applySocial(snapshot);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, []);
 
   const connect = async () => {

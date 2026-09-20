@@ -44,19 +44,35 @@ export default function CampaignsPage() {
     strategy: "",
   });
 
+  /** Pure fetch: returns the payload and touches no state, so it is safe to call from an effect. */
+  const fetchRows = async (): Promise<CampaignRow[] | null> => {
+    const res = await fetch("/api/data?type=campaigns&limit=120");
+    const data = await res.json();
+    return data.ok ? (data.rows as CampaignRow[]) : null;
+  };
+
+  /** Writes a payload into state. Passed to the effect by reference, never called synchronously. */
+  const applyRows = (next: CampaignRow[] | null) => {
+    if (next) setRows(next);
+  };
+
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/data?type=campaigns&limit=120");
-      const data = await res.json();
-      if (data.ok) setRows(data.rows);
+      applyRows(await fetchRows());
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    let active = true;
+    fetchRows()
+      .then(applyRows)
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     fetch("/api/clients")
       .then((r) => r.json())
       .then((d) => {
@@ -66,6 +82,9 @@ export default function CampaignsPage() {
         }
       })
       .catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, []);
 
   const create = async () => {

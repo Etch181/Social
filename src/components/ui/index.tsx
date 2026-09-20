@@ -285,11 +285,17 @@ export function Counter({ to, duration = 1100 }: { to: number; duration?: number
   const [value, setValue] = useState(0);
   const reduce = useReducedMotion();
 
+  // With reduced motion the counter jumps straight to its target. Doing that
+  // during render (React's supported way to adjust state for a changed value)
+  // avoids a cascading render, and lets the effect below skip animation.
+  const [reducedFor, setReducedFor] = useState<number | null>(null);
+  if (reduce && reducedFor !== to) {
+    setReducedFor(to);
+    setValue(to);
+  }
+
   useEffect(() => {
-    if (reduce) {
-      setValue(to);
-      return;
-    }
+    if (reduce) return;
     let frame = 0;
     const start = performance.now();
     const tick = (now: number) => {
